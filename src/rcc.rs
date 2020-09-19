@@ -2,9 +2,13 @@
 
 use core::cmp;
 
-use crate::pac::{rcc, PWR, RCC};
+use crate::pac::{
+    rcc::{self, cfgr::PLLSRC_A},
+    PWR, RCC,
+};
 use cast::u32;
 
+use crate::const_rcc::RccConfig;
 use crate::flash::ACR;
 use crate::time::Hertz;
 
@@ -134,7 +138,7 @@ impl APB2 {
     }
 }
 
-const HSI: u32 = 8_000_000; // Hz
+pub(crate) const HSI: u32 = 8_000_000; // Hz
 
 /// Clock configuration register (CFGR)
 ///
@@ -445,6 +449,114 @@ impl CFGR {
             sysclk: Hertz(sysclk),
             adcclk: Hertz(adcclk),
             usbclk_valid,
+        }
+    }
+
+    pub fn apply_config(self, config: RccConfig, _acr: &mut ACR) -> Clocks {
+        assert!(config.sysclk <= 72_000_000);
+        assert!(config.hclk <= 72_000_000);
+        assert!(config.pclk1 <= 36_000_000);
+        assert!(config.pclk2 <= 72_000_000);
+        assert!(config.adcclk <= 14_000_000);
+        let rcc = unsafe { &*RCC::ptr() };
+
+        if config.pllsrc == PLLSRC_A::HSE_DIV_PREDIV {
+            // use hse
+            rcc.cr.modify(|_, w| w.hseon().set_bit());
+            while rcc.cr.read().hserdy().bit_is_clear() {}
+        }
+
+        if let Some(pllmul_bits) = config.pllmul_bits {
+            // enable PLL and wait for it to be ready
+
+            #[allow(unused_unsafe)]
+            rcc.cfgr.modify(|_, w| unsafe {
+                w.pllmul().bits(pllmul_bits).pllsrc().variant(config.pllsrc)
+            });
+            rcc.cr.modify(|_, w| w.pllon().set_bit());
+            while rcc.cr.read().pllrdy().bit_is_clear() {}
+        }
+
+        // set prescalers and clock source
+        #[cfg(feature = "connectivity")]
+        rcc.cfgr.modify(|_, w| unsafe {
+            w.adcpre().bits(config.adcpre_bits);
+            w.ppre2()
+                .bits(config.ppre2_bits)
+                .ppre1()
+                .bits(config.ppre1_bits)
+                .hpre()
+                .bits(config.hpre_bits)
+                .otgfspre()
+                .variant(config.usbpre)
+                .sw()
+                .bits(if config.pllmul_bits.is_some() {
+                    // PLL
+                    0b10
+                } else if config.pllsrc == PLLSRC_A::HSE_DIV_PREDIV {
+                    // HSE
+                    0b1
+                } else {
+                    // HSI
+                    0b0
+                })
+        });
+
+        #[cfg(feature = "stm32f103")]
+        rcc.cfgr.modify(|_, w| unsafe {
+            w.adcpre().bits(config.adcpre_bits);
+            w.ppre2()
+                .bits(config.ppre2_bits)
+                .ppre1()
+                .bits(config.ppre1_bits)
+                .hpre()
+                .bits(config.hpre_bits)
+                .usbpre()
+                .variant(config.usbpre)
+                .sw()
+                .bits(if config.pllmul_bits.is_some() {
+                    // PLL
+                    0b10
+                } else if config.pllsrc == PLLSRC_A::HSE_DIV_PREDIV {
+                    // HSE
+                    0b1
+                } else {
+                    // HSI
+                    0b0
+                })
+        });
+
+        #[cfg(any(feature = "stm32f100", feature = "stm32f101"))]
+        rcc.cfgr.modify(|_, w| unsafe {
+            w.adcpre().bits(config.adcpre_bits);
+            w.ppre2()
+                .bits(config.ppre2_bits)
+                .ppre1()
+                .bits(config.ppre1_bits)
+                .hpre()
+                .bits(config.hpre_bits)
+                .sw()
+                .bits(if pllmul_bits.is_some() {
+                    // PLL
+                    0b10
+                } else if config.pllsrc == PLLSRC_A::HSE_DIV_PREDIV {
+                    // HSE
+                    0b1
+                } else {
+                    // HSI
+                    0b0
+                })
+        });
+
+        Clocks {
+            hclk: Hertz(config.hclk),
+            pclk1: Hertz(config.pclk1),
+            pclk2: Hertz(config.pclk2),
+            ppre1: config.ppre1,
+            ppre2: config.ppre2,
+            sysclk: Hertz(config.sysclk),
+            adcclk: Hertz(config.adcclk),
+            usbclk_valid: config.usbclk_valid,
         }
     }
 }

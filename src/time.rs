@@ -77,6 +77,13 @@ pub struct Hertz(pub u32);
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct KiloHertz(pub u32);
 
+impl KiloHertz {
+    /// Const-fn to convert to `Hertz`.
+    pub const fn to_hz(self) -> Hertz {
+        Hertz(self.0 * 1_000)
+    }
+}
+
 /// Megahertz
 ///
 /// Create a frequency specified in megahertz.
@@ -97,6 +104,13 @@ pub struct KiloHertz(pub u32);
 /// ```
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct MegaHertz(pub u32);
+
+impl MegaHertz {
+    /// Const-fn to convert to `Hertz`.
+    pub const fn to_hz(self) -> Hertz {
+        Hertz(self.0 * 1_000_000)
+    }
+}
 
 /// Time unit
 #[derive(PartialEq, PartialOrd, Clone, Copy)]

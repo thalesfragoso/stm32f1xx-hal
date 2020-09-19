@@ -145,6 +145,8 @@ pub mod backup_domain;
 #[cfg(feature = "device-selected")]
 pub mod bb;
 #[cfg(feature = "device-selected")]
+pub mod const_rcc;
+#[cfg(feature = "device-selected")]
 pub mod crc;
 #[cfg(feature = "device-selected")]
 pub mod delay;

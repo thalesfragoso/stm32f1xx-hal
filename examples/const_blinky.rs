@@ -15,7 +15,20 @@ use nb::block;
 
 use cortex_m_rt::entry;
 use embedded_hal::digital::v2::OutputPin;
-use stm32f1xx_hal::{pac, prelude::*, timer::Timer};
+use stm32f1xx_hal::{
+    const_rcc::{ClockConfig, RccConfig},
+    pac,
+    prelude::*,
+    time::MegaHertz,
+    timer::Timer,
+};
+
+const CONFIG: RccConfig = ClockConfig::new()
+    .use_hse(MegaHertz(8).to_hz())
+    .sysclk(MegaHertz(72).to_hz())
+    .pclk1(MegaHertz(36).to_hz())
+    .pclk2(MegaHertz(72).to_hz())
+    .get_config();
 
 #[entry]
 fn main() -> ! {
@@ -31,13 +44,7 @@ fn main() -> ! {
 
     // Freeze the configuration of all the clocks in the system and store the frozen frequencies in
     // `clocks`
-    let clocks = rcc
-        .cfgr
-        .use_hse(8.mhz())
-        .sysclk(72.mhz())
-        .pclk1(36.mhz())
-        .pclk2(72.mhz())
-        .freeze(&mut flash.acr);
+    let clocks = rcc.cfgr.apply_config(CONFIG, &mut flash.acr);
 
     // Acquire the GPIOC peripheral
     let mut gpioc = dp.GPIOC.split(&mut rcc.apb2);
